@@ -18,43 +18,52 @@ class ForumPostController extends Controller
 
     public function store(Request $request, ForumCategory $category, ForumTopic $topic)
     {
-        $this->authorize('create', [ForumPost::class, $topic]);
-
-        if ($topic->status === 'closed') {
-            return back()->with('error', 'Ce sujet est fermé. Vous ne pouvez plus répondre.');
-        }
-
-        $validated = $request->validate([
-            'content' => 'required|string|min:5',
-            'parent_id' => 'nullable|exists:forum_posts,id',
-        ]);
-
-        $post = $topic->posts()->create([
-            'user_id' => Auth::id(),
-            'content' => $validated['content'],
-            'parent_id' => $validated['parent_id'] ?? null,
-        ]);
-
-        // Abonner automatiquement l'auteur de la réponse
-        if (!$topic->isSubscribedBy(Auth::user())) {
-            $topic->subscriptions()->create([
-                'user_id' => Auth::id(),
-                'type' => 'instant',
-            ]);
-        }
-
-        return redirect()->route('forum.topics.show', [$category->slug, $topic->slug])
-            ->with('success', 'Réponse publiée avec succès !');
+        
+       // Vérifier si le sujet est fermé
+       if ($topic->status === 'closed') {
+        return back()->with('error', 'Ce sujet est fermé. Vous ne pouvez plus répondre.');
     }
 
-    public function edit(ForumCategory $category, ForumTopic $topic, ForumPost $post)
+    $validated = $request->validate([
+        'content' => 'required|string|min:5',
+        'parent_id' => 'nullable|exists:forum_posts,id',
+    ]);
+
+    $post = $topic->posts()->create([
+        'user_id' => Auth::id(),
+        'content' => $validated['content'],
+        'parent_id' => $validated['parent_id'] ?? null,
+    ]);
+
+    // Abonner automatiquement l'auteur de la réponse
+    if (method_exists($topic, 'subscriptions') && !$topic->isSubscribedBy(Auth::user())) {
+        $topic->subscriptions()->create([
+            'user_id' => Auth::id(),
+            'type' => 'instant',
+        ]);
+    }
+
+    // Redirection avec ancre vers le nouveau message
+    return redirect()
+        ->route('forum.topics.show', $topic)
+        ->with('success', 'Réponse publiée avec succès !')
+        ->withFragment('post-' . $post->id);
+}
+
+    /**
+     * Show the form for editing the specified post.
+     */
+    public function edit(ForumPost $post)
     {
         $this->authorize('update', $post);
+        
+        $topic = $post->topic;
+        $category = $topic->category;
 
         return view('forum.posts.edit', compact('category', 'topic', 'post'));
     }
 
-    public function update(Request $request, ForumCategory $category, ForumTopic $topic, ForumPost $post)
+    public function update(Request $request, ForumPost $post)
     {
         $this->authorize('update', $post);
 
@@ -68,21 +77,36 @@ class ForumPostController extends Controller
             'edited_at' => now(),
         ]);
 
-        return redirect()->route('forum.topics.show', [$category->slug, $topic->slug])
-            ->with('success', 'Réponse mise à jour avec succès !');
+        return redirect()
+            ->route('forum.topics.show', $post->topic)
+            ->with('success', 'Réponse mise à jour avec succès !')
+            ->withFragment('post-' . $post->id);
     }
 
-    public function destroy(ForumCategory $category, ForumTopic $topic, ForumPost $post)
+    /**
+     * Remove the specified post.
+     */
+    public function destroy(ForumPost $post)
     {
         $this->authorize('delete', $post);
 
+        $topic = $post->topic;
         $post->delete();
 
-        return back()->with('success', 'Réponse supprimée avec succès !');
+        return redirect()
+            ->route('forum.topics.show', $topic)
+            ->with('success', 'Réponse supprimée avec succès !');
     }
 
-    public function like(ForumCategory $category, ForumTopic $topic, ForumPost $post)
+     /**
+     * Like/Unlike a post.
+     */
+    public function like(ForumPost $post)
     {
+        if (!method_exists($post, 'toggleLike')) {
+            return response()->json(['success' => false, 'message' => 'Fonction non disponible']);
+        }
+        
         $post->toggleLike(Auth::user());
 
         return response()->json([
@@ -92,7 +116,11 @@ class ForumPostController extends Controller
         ]);
     }
 
-    public function markAsSolution(ForumCategory $category, ForumTopic $topic, ForumPost $post)
+
+    /**
+     * Mark a post as solution.
+     */
+    public function markAsSolution(ForumTopic $topic, ForumPost $post)
     {
         $this->authorize('update', $topic);
 
@@ -105,11 +133,17 @@ class ForumPostController extends Controller
         $topic->markAsResolved($post);
 
         // Points bonus pour la solution
-        app(\App\Services\GamificationService::class)->addPoints(
-            $post->user,
-            'solution_marked',
-            $post
-        );
+        if (class_exists(\App\Services\GamificationService::class)) {
+            try {
+                app(\App\Services\GamificationService::class)->addPoints(
+                    $post->user,
+                    'solution_marked',
+                    $post
+                );
+            } catch (\Exception $e) {
+                \Log::error('Erreur gamification solution: ' . $e->getMessage());
+            }
+        }
 
         return back()->with('success', 'Réponse marquée comme solution !');
     }

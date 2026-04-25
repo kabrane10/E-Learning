@@ -5,14 +5,21 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\Permission\Traits\HasRoles;
+use Spatie\MediaLibrary\HasMedia;         
+use Spatie\MediaLibrary\InteractsWithMedia; 
 
-class User extends Authenticatable 
-// implements MustVerifyEmail // Important pour la vérification d'email
+class User extends Authenticatable implements HasMedia
+
+// class User extends Authenticatable 
+//  implements MustVerifyEmail // Important pour la vérification d'email
 {
     use HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles;
+    use HasFactory, Notifiable, HasRoles, InteractsWithMedia;
 
     /**
      * The attributes that are mass assignable.
@@ -23,6 +30,13 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'title',
+        'bio',
+        'website',
+        'twitter',
+        'linkedin',
+        'youtube',
+        'settings',
         'provider',
         'provider_id',
         'avatar',
@@ -55,6 +69,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'settings' => 'array',
         'total_points' => 'integer',
         'current_level' => 'integer',
         'experience_points' => 'integer',
@@ -393,5 +408,6 @@ public function unreadMessagesCount(): int
     {
         return $this->belongsTo(Level::class, 'current_level', 'level_number');
     }
+
 
 }

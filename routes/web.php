@@ -1,12 +1,8 @@
 <?php
 
-use App\Http\Controllers\ForumController;
-use App\Http\Controllers\ForumCategoryController;
-use App\Http\Controllers\ForumTopicController;
-use App\Http\Controllers\ForumPostController;
-use App\Http\Controllers\GamificationController;
-use App\Http\Controllers\ChatController;
-use App\Http\Controllers\ConversationController;
+use Illuminate\Support\Facades\Route;
+
+// Contrôleurs d'Authentification
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -17,6 +13,23 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\Auth\SocialAuthController;
 
+// Contrôleurs Publics
+use App\Http\Controllers\CourseController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ProfileController;
+
+// Contrôleurs Forum
+use App\Http\Controllers\ForumController;
+use App\Http\Controllers\ForumCategoryController;
+use App\Http\Controllers\ForumTopicController;
+use App\Http\Controllers\ForumPostController;
+
+// Contrôleurs Chat & Gamification
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\GamificationController;
+
+// Contrôleurs Admin
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\Admin\CourseController as AdminCourseController;
@@ -30,21 +43,49 @@ use App\Http\Controllers\Admin\ForumController as AdminForumController;
 use App\Http\Controllers\Admin\GamificationController as AdminGamificationController;
 use App\Http\Controllers\Admin\ChatController as AdminChatController;
 
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\CourseController;
+// Contrôleurs Instructor (Formateur)
+use App\Http\Controllers\Instructor\DashboardController as InstructorDashboardController;
 use App\Http\Controllers\Instructor\CourseController as InstructorCourseController;
 use App\Http\Controllers\Instructor\ChapterController;
 use App\Http\Controllers\Instructor\LessonController;
-use App\Http\Controllers\Instructor\QuizController;
-use App\Http\Controllers\Student\DashboardController;
+use App\Http\Controllers\Instructor\QuizController as InstructorQuizController;
+use App\Http\Controllers\Instructor\AnalyticsController as InstructorAnalyticsController;
+use App\Http\Controllers\Instructor\EarningsController as InstructorEarningsController;
+use App\Http\Controllers\Instructor\ReviewController as InstructorReviewController;
+use App\Http\Controllers\Instructor\ProfileController as InstructorProfileController;
+
+// Contrôleurs Student (Étudiant)
+use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Student\EnrollmentController;
 use App\Http\Controllers\Student\LearningController;
 use App\Http\Controllers\Student\ProgressController;
 use App\Http\Controllers\Student\CertificateController;
 use App\Http\Controllers\Student\BookmarkController;
-use App\Http\Controllers\ReviewController;
 
-use Illuminate\Support\Facades\Route;
+// Contrôleurs API
+use App\Http\Controllers\Api\Instructor\WithdrawController;
+
+/*
+|--------------------------------------------------------------------------
+| Routes API Instructor (dans web.php avec middleware auth)
+|--------------------------------------------------------------------------
+*/
+
+Route::middleware(['auth', 'role:instructor,admin'])->prefix('api/instructor')->name('api.instructor.')->group(function () {
+    
+    // Paramètres de paiement
+    Route::get('/payment-settings', [WithdrawController::class, 'settings'])->name('payment-settings');
+    Route::post('/save-settings', [WithdrawController::class, 'saveSettings'])->name('save-settings');
+    
+    // Retraits
+    Route::get('/balance', [WithdrawController::class, 'balance'])->name('balance');
+    Route::get('/transactions', [WithdrawController::class, 'transactions'])->name('transactions');
+    Route::get('/withdraw-history', [WithdrawController::class, 'history'])->name('withdraw-history');
+    Route::post('/withdraw', [WithdrawController::class, 'store'])->name('withdraw');
+    
+});
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -106,20 +147,24 @@ require __DIR__.'/auth.php';
 
 /*
 |--------------------------------------------------------------------------
-| Routes Dashboard Principal
+| Routes Dashboard Principal (Redirection intelligente)
 |--------------------------------------------------------------------------
 */
 
+// Dans routes/web.php
 Route::get('/dashboard', function () {
     $user = auth()->user();
     
     if ($user->hasRole('admin')) {
         return redirect()->route('admin.dashboard');
-    } elseif ($user->hasRole('instructor')) {
-        return redirect()->route('instructor.courses.index');
-    } else {
-        return redirect()->route('student.my-courses');
     }
+    
+    if ($user->hasRole('instructor')) {
+        return redirect()->route('instructor.dashboard');
+    }
+    
+    // ✅ Étudiant
+    return redirect()->route('student.my-courses');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
 /*
@@ -129,8 +174,8 @@ Route::get('/dashboard', function () {
 */
 
 Route::middleware(['auth', 'role:student,admin'])->prefix('student')->name('student.')->group(function () {
-    Route::get('/my-courses', [DashboardController::class, 'myCourses'])->name('my-courses');
-    Route::get('/dashboard/stats', [DashboardController::class, 'stats'])->name('dashboard.stats');
+    Route::get('/my-courses', [StudentDashboardController::class, 'myCourses'])->name('my-courses');
+    Route::get('/dashboard/stats', [StudentDashboardController::class, 'stats'])->name('dashboard.stats');
     Route::post('/enroll/{course}', [EnrollmentController::class, 'store'])->name('enroll');
     Route::delete('/unenroll/{course}', [EnrollmentController::class, 'destroy'])->name('unenroll');
     
@@ -153,6 +198,10 @@ Route::middleware(['auth', 'role:student,admin'])->prefix('student')->name('stud
     Route::get('/bookmarks', [BookmarkController::class, 'index'])->name('bookmarks');
     Route::post('/bookmark/{course}', [BookmarkController::class, 'toggle'])->name('bookmark.toggle');
     Route::delete('/bookmarks/clear', [BookmarkController::class, 'clear'])->name('bookmarks.clear');
+    
+    // Route pour confirmer l'inscription à un cours payant
+    Route::post('/courses/{course}/confirm-enrollment', [EnrollmentController::class, 'confirm'])->name('student.enroll.confirm');
+
 });
 
 /*
@@ -162,41 +211,83 @@ Route::middleware(['auth', 'role:student,admin'])->prefix('student')->name('stud
 */
 
 Route::middleware(['auth', 'role:instructor,admin'])->prefix('instructor')->name('instructor.')->group(function () {
-    Route::get('/dashboard', [InstructorCourseController::class, 'dashboard'])->name('dashboard');
-    Route::get('/analytics', [InstructorCourseController::class, 'analytics'])->name('analytics');
-    Route::get('/earnings', [InstructorCourseController::class, 'earnings'])->name('earnings');
     
+    // Dashboard
+    Route::get('/dashboard', [InstructorDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/stats', [InstructorDashboardController::class, 'stats'])->name('dashboard.stats');
+    Route::get('/dashboard/analytics', [InstructorDashboardController::class, 'analytics'])->name('dashboard.analytics');
+    
+    
+    // Analytics
+    Route::get('/analytics', [InstructorAnalyticsController::class, 'index'])->name('analytics');
+    Route::get('/analytics/revenue', [InstructorAnalyticsController::class, 'revenue'])->name('analytics.revenue');
+    Route::get('/analytics/engagement', [InstructorAnalyticsController::class, 'engagement'])->name('analytics.engagement');
+    
+    // Earnings
+    Route::get('/earnings', [InstructorEarningsController::class, 'index'])->name('earnings');
+    
+    // Courses
     Route::resource('courses', InstructorCourseController::class);
     Route::post('courses/{course}/toggle-publish', [InstructorCourseController::class, 'togglePublish'])->name('courses.toggle-publish');
     Route::post('courses/{course}/duplicate', [InstructorCourseController::class, 'duplicate'])->name('courses.duplicate');
-    Route::get('courses/{course}/analytics', [InstructorCourseController::class, 'courseAnalytics'])->name('courses.analytics');
+    Route::get('courses/{course}/analytics', [InstructorCourseController::class, 'analytics'])->name('courses.analytics');
     Route::get('courses/{course}/students', [InstructorCourseController::class, 'students'])->name('courses.students');
     
+    // Chapters
     Route::post('courses/{course}/chapters', [ChapterController::class, 'store'])->name('chapters.store');
     Route::put('courses/{course}/chapters/{chapter}', [ChapterController::class, 'update'])->name('chapters.update');
-    Route::delete('courses/{course}/chapters/{chapter}', [ChapterController::class, '41destroy'])->name('chapters.destroy');
+    Route::delete('courses/{course}/chapters/{chapter}', [ChapterController::class, 'destroy'])->name('chapters.destroy');
     Route::post('courses/{course}/chapters/reorder', [ChapterController::class, 'reorder'])->name('chapters.reorder');
     
+    // Lessons
     Route::post('courses/{course}/lessons/{chapter?}', [LessonController::class, 'store'])->name('lessons.store');
     Route::put('courses/{course}/lessons/{lesson}', [LessonController::class, 'update'])->name('lessons.update');
     Route::delete('courses/{course}/lessons/{lesson}', [LessonController::class, 'destroy'])->name('lessons.destroy');
     Route::post('courses/{course}/lessons/reorder', [LessonController::class, 'reorder'])->name('lessons.reorder');
-    Route::post('lessons/{lesson}/preview', [LessonController::class, 'preview'])->name('lessons.preview');
+
+    // Liste des quiz
+    Route::get('/quizzes', [InstructorQuizController::class, 'index'])->name('quizzes.index');
+    // Route pour créer un quiz directement depuis un cours
+    Route::get('/courses/{course}/quiz/create', [InstructorQuizController::class, 'createFromCourse'])
+->name('quizzes.create.from.course');
+
+    // Création (nécessite une leçon)
+    Route::get('/lessons/{lesson}/quiz/create', [InstructorQuizController::class, 'create'])->name('quizzes.create');
+    Route::post('/lessons/{lesson}/quiz', [InstructorQuizController::class, 'store'])->name('quizzes.store');
     
-    Route::get('lessons/{lesson}/quiz/create', [QuizController::class, 'create'])->name('quizzes.create');
-    Route::post('lessons/{lesson}/quiz', [QuizController::class, 'store'])->name('quizzes.store');
-    Route::get('quizzes/{quiz}/edit', [QuizController::class, 'edit'])->name('quizzes.edit');
-    Route::put('quizzes/{quiz}', [QuizController::class, 'update'])->name('quizzes.update');
-    Route::delete('quizzes/{quiz}', [QuizController::class, 'destroy'])->name('quizzes.destroy');
-    Route::post('quizzes/{quiz}/questions', [QuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
-    Route::put('questions/{question}', [QuizController::class, 'updateQuestion'])->name('quizzes.questions.update');
-    Route::delete('questions/{question}', [QuizController::class, 'destroyQuestion'])->name('quizzes.questions.destroy');
-    Route::post('quizzes/{quiz}/questions/reorder', [QuizController::class, 'reorderQuestions'])->name('quizzes.questions.reorder');
-    Route::get('quizzes/{quiz}/attempts', [QuizController::class, 'attempts'])->name('quizzes.attempts');
-    Route::get('quizzes/{quiz}/statistics', [QuizController::class, 'statistics'])->name('quizzes.statistics');
+    // Édition et gestion
+    Route::get('/quizzes/{quiz}/edit', [InstructorQuizController::class, 'edit'])->name('quizzes.edit');
+    Route::put('/quizzes/{quiz}', [InstructorQuizController::class, '58update'])->name('quizzes.update');
+    Route::delete('/quizzes/{quiz}', [InstructorQuizController::class, 'destroy'])->name('quizzes.destroy');
     
-    Route::get('courses/{course}/reviews', [InstructorCourseController::class, 'reviews'])->name('courses.reviews');
-    Route::post('courses/{course}/reviews/{review}/reply', [InstructorCourseController::class, 'replyReview'])->name('courses.reviews.reply');
+    // Questions
+    Route::post('/quizzes/{quiz}/questions', [InstructorQuizController::class, 'storeQuestion'])->name('quizzes.questions.store');
+    Route::put('/questions/{question}', [InstructorQuizController::class, 'updateQuestion'])->name('quizzes.questions.update');
+    Route::delete('/questions/{question}', [InstructorQuizController::class, 'destroyQuestion'])->name('quizzes.questions.destroy');
+    Route::post('/quizzes/{quiz}/questions/reorder', [InstructorQuizController::class, 'reorderQuestions'])->name('quizzes.questions.reorder');
+    
+     // ✅ Tentatives de quiz
+     Route::get('/quizzes/{quiz}/attempts', [QuizAttemptController::class, 'index'])->name('quizzes.attempts');
+     Route::get('/quizzes/attempts', [QuizAttemptController::class, 'allAttempts'])->name('quizzes.attempts.all');
+     Route::get('/quizzes/attempts/{attempt}', [QuizAttemptController::class, 'show'])->name('quizzes.attempts.show');
+     Route::get('/quizzes/attempts/{attempt}/details', [QuizAttemptController::class, 'details'])->name('quizzes.attempts.details');
+     Route::delete('/quizzes/attempts/{attempt}', [QuizAttemptController::class, 'destroy'])->name('quizzes.attempts.destroy');
+     
+    // Reviews
+    Route::get('/reviews', [ReviewController::class, 'index'])->name('reviews.index');
+    Route::get('/courses/{course}/reviews', [ReviewController::class, 'courseReviews'])->name('courses.reviews');
+    Route::post('/courses/{course}/reviews/{review}/reply', [ReviewController::class, 'reply'])->name('courses.reviews.reply');
+    
+    // Profile
+    Route::get('/profile', [InstructorProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [InstructorProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/password', [InstructorProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::get('/profile/settings', [InstructorProfileController::class, 'settings'])->name('profile.settings');
+    Route::put('/profile/settings', [InstructorProfileController::class, 'updateSettings'])->name('profile.settings.update');
+   
+    // Sauvegarde des paramètres
+    Route::post('/api/instructor/save-settings', [App\Http\Controllers\Api\Instructor\WithdrawController::class, 'saveSettings'])
+->name('api.instructor.save-settings');
 });
 
 /*
@@ -254,18 +345,20 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::get('/analytics/geography', [AdminAnalyticsController::class, 'geography'])->name('analytics.geography');
     Route::get('/analytics/devices', [AdminAnalyticsController::class, 'devices'])->name('analytics.devices');
     
-    // Paramètres
-    Route::get('/settings', [AdminSettingController::class, 'index'])->name('settings');
-    Route::post('/settings/general', [AdminSettingController::class, 'updateGeneral'])->name('settings.general');
-    Route::post('/settings/email', [AdminSettingController::class, 'updateEmail'])->name('settings.email');
-    Route::post('/settings/payment', [AdminSettingController::class, 'updatePayment'])->name('settings.payment');
-    Route::post('/settings/security', [AdminSettingController::class, 'updateSecurity'])->name('settings.security');
-    Route::post('/settings/social', [AdminSettingController::class, 'updateSocial'])->name('settings.social');
-    Route::post('/settings/seo', [AdminSettingController::class, 'updateSeo'])->name('settings.seo');
-    Route::post('/settings/email/test', [AdminSettingController::class, 'testEmail'])->name('settings.email.test');
-    Route::post('/settings/cache/clear', [AdminSettingController::class, 'clearCache'])->name('settings.cache.clear');
-    
-    // Logs
+     // Paramètres
+     Route::get('/settings', [AdminSettingController::class, 'index'])->name('settings');
+     Route::post('/settings/general', [AdminSettingController::class, 'updateGeneral'])->name('settings.general');
+     Route::post('/settings/email', [AdminSettingController::class, 'updateEmail'])->name('settings.email');
+     Route::post('/settings/payment', [AdminSettingController::class, 'updatePayment'])->name('settings.payment');
+     Route::post('/settings/security', [AdminSettingController::class, 'updateSecurity'])->name('settings.security');
+     Route::post('/settings/social', [AdminSettingController::class, 'updateSocial'])->name('settings.social');
+     Route::post('/settings/seo', [AdminSettingController::class, 'updateSeo'])->name('settings.seo');
+     Route::post('/settings/email/test', [AdminSettingController::class, 'testEmail'])->name('settings.email.test');
+     Route::post('/settings/cache/clear', [AdminSettingController::class, 'clearCache'])->name('settings.cache.clear');
+     
+     //==========================
+    //===================== Logs============
+    //====================================
     Route::get('/logs', [AdminLogController::class, 'index'])->name('logs');
     Route::get('/logs/activity', [AdminLogController::class, 'activity'])->name('logs.activity');
     Route::get('/logs/search', [AdminLogController::class, 'search'])->name('logs.search');
@@ -276,33 +369,61 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->name('admin.')->grou
     Route::post('/logs/clear', [AdminLogController::class, 'clear'])->name('logs.clear');
     Route::delete('/logs/{filename}', [AdminLogController::class, 'destroy'])->name('logs.destroy');
 
-    // Admin Chat
-    Route::prefix('chat')->name('chat.')->group(function () {
-        Route::get('/', [AdminChatController::class, 'index'])->name('index');
-        Route::get('/conversations', [AdminChatController::class, 'conversations'])->name('conversations');
-        Route::get('/conversations/{conversation}', [AdminChatController::class, 'showConversation'])->name('conversations.show');
-        Route::delete('/conversations/{conversation}', [AdminChatController::class, 'destroyConversation'])->name('conversations.destroy');
-        Route::get('/messages', [AdminChatController::class, 'messages'])->name('messages');
-        Route::delete('/messages/{message}', [AdminChatController::class, 'destroyMessage'])->name('messages.destroy');
-        Route::get('/settings', [AdminChatController::class, 'settings'])->name('settings');
-        Route::post('/settings', [AdminChatController::class, 'updateSettings'])->name('settings.update');
-        Route::get('/export', [AdminChatController::class, 'export'])->name('export');
-    });
+    // Admin Chat - Routes complètes
+Route::middleware(['auth', 'role:admin'])->prefix('admin/chat')->name('admin.chat.')->group(function () {
+    // Dashboard
+    Route::get('/', [App\Http\Controllers\Admin\ChatController::class, 'index'])->name('index');
+    
+    // Conversations
+    Route::get('/conversations', [App\Http\Controllers\Admin\ChatController::class, 'conversations'])->name('conversations.index');
+    Route::get('/conversations/create', [App\Http\Controllers\Admin\ChatController::class, 'createConversation'])->name('conversations.create');
+    Route::post('/conversations', [App\Http\Controllers\Admin\ChatController::class, 'storeConversation'])->name('conversations.store');
+    Route::get('/conversations/{conversation}', [App\Http\Controllers\Admin\ChatController::class, 'showConversation'])->name('conversations.show');
+    Route::get('/conversations/{conversation}/edit', [App\Http\Controllers\Admin\ChatController::class, 'editConversation'])->name('conversations.edit');
+    Route::put('/conversations/{conversation}', [App\Http\Controllers\Admin\ChatController::class, 'updateConversation'])->name('conversations.update');
+    Route::delete('/conversations/{conversation}', [App\Http\Controllers\Admin\ChatController::class, 'destroyConversation'])->name('conversations.destroy');
+    
+    // Messages
+    Route::get('/messages', [App\Http\Controllers\Admin\ChatController::class, 'messages'])->name('messages.index');
+    Route::delete('/messages/{message}', [App\Http\Controllers\Admin\ChatController::class, 'destroyMessage'])->name('messages.destroy');
+    
+    // Paramètres
+    Route::get('/settings', [App\Http\Controllers\Admin\ChatController::class, 'settings'])->name('settings');
+    Route::post('/settings', [App\Http\Controllers\Admin\ChatController::class, 'updateSettings'])->name('settings.update');
+    
+    // Export
+    Route::get('/export', [App\Http\Controllers\Admin\ChatController::class, 'export'])->name('export');
+});
 
     // Admin Forum
     Route::prefix('forum')->name('forum.')->group(function () {
         Route::get('/categories', [AdminForumController::class, 'categories'])->name('categories.index');
+        Route::get('/categories/create', [AdminForumController::class, '50create'])->name('categories.create');
+        Route::post('/categories/create', [AdminForumController::class, 'storeCategory'])->name('categories.create');
+        Route::get('/categories/{category}/edit', [AdminForumController::class, 'editCategory'])->name('categories.edit');
         Route::post('/categories', [AdminForumController::class, 'storeCategory'])->name('categories.store');
+        Route::get('/categories/{category}', [AdminForumController::class, 'showCategory'])->name('categories.show');
         Route::put('/categories/{category}', [AdminForumController::class, 'updateCategory'])->name('categories.update');
         Route::delete('/categories/{category}', [AdminForumController::class, 'destroyCategory'])->name('categories.destroy');
+        Route::post('/categories/{category}/toggle', [AdminForumController::class, 'toggleCategory'])->name('categories.toggle');
         
         Route::get('/topics', [AdminForumController::class, 'topics'])->name('topics.index');
+        Route::get('/topics/{topic}', [AdminForumController::class, 'showTopic'])->name('topics.show');
+        Route::post('/topics', [AdminForumController::class, 'storeTopic'])->name('topics.store');
+        Route::get('/topics/{topic}/edit', [AdminForumController::class, 'editTopic'])->name('topics.edit');
+        Route::get('/topics/create', [AdminForumController::class, 'createTopic'])->name('topics.create');
+        Route::get('/topics/{topic}', [App\Http\Controllers\Admin\ForumController::class, 'showTopic'])->name('topics.show');
+
+        Route::put('/topics/{topic}', [AdminForumController::class, 'updateTopic'])->name('topics.update');
         Route::delete('/topics/{topic}', [AdminForumController::class, 'destroyTopic'])->name('topics.destroy');
         Route::post('/topics/{topic}/pin', [AdminForumController::class, 'togglePin'])->name('topics.pin');
         Route::post('/topics/{topic}/close', [AdminForumController::class, 'toggleClose'])->name('topics.close');
         Route::post('/topics/bulk-action', [AdminForumController::class, 'bulkActionTopics'])->name('topics.bulk-action');
         
         Route::get('/posts', [AdminForumController::class, 'posts'])->name('posts.index');
+        Route::post('/topics/{topic}/posts', [AdminForumController::class, 'storePost'])->name('posts.store');
+        Route::get('/posts/{post}/edit', [AdminForumController::class, 'editPost'])->name('posts.edit');
+        Route::put('/posts/{post}', [AdminForumController::class, 'updatePost'])->name('posts.update');
         Route::delete('/posts/{post}', [AdminForumController::class, 'destroyPost'])->name('posts.destroy');
         Route::post('/posts/{post}/solution', [AdminForumController::class, 'markAsSolution'])->name('posts.solution');
         Route::post('/posts/bulk-action', [AdminForumController::class, 'bulkActionPosts'])->name('posts.bulk-action');
@@ -499,7 +620,7 @@ Route::prefix('forum')->name('forum.')->group(function () {
 | Route de Fallback
 |--------------------------------------------------------------------------
 */
-
 Route::fallback(function () {
     return response()->view('errors.404', [], 404);
 });
+

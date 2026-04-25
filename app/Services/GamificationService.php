@@ -23,58 +23,83 @@ class GamificationService
         'course_completed' => 500,
         'lesson_completed' => 50,
         'quiz_passed' => 200,
-        'perfect_quiz' => 100, // Bonus
+        'perfect_quiz' => 100,
         'daily_login' => 10,
-        'streak_bonus' => 50, // Par jour de streak
+        'streak_bonus' => 50,
         'review_written' => 30,
         'badge_earned' => 100,
         'achievement_completed' => 300,
         'first_course' => 250,
         'first_quiz' => 150,
+        'forum_topic_created' => 25,
+        'forum_post_created' => 15,
+        'post_liked' => 5,
+        'solution_marked' => 50,
+        'level_up_bonus' => 200,
     ];
 
     /**
      * Ajouter des points à un utilisateur
      */
-    public function addPoints(User $user, string $action, $pointable = null, array $metadata = []): Point
+    public function addPoints(User $user, string $action, $pointable = null, array $metadata = []): ?Point
     {
         $amount = self::POINTS[$action] ?? 0;
         
+        if ($amount <= 0) {
+            return null;
+        }
+        
         // Bonus de streak
-        if ($user->streak_days > 0) {
+        if ($user->streak_days > 0 && !in_array($action, ['daily_login', 'streak_bonus'])) {
             $streakBonus = min(100, $user->streak_days * 5);
             $amount += $streakBonus;
             $metadata['streak_bonus'] = $streakBonus;
         }
 
-        $point = DB::transaction(function () use ($user, $amount, $action, $pointable, $metadata) {
-            $point = Point::create([
-                'user_id' => $user->id,
-                'amount' => $amount,
-                'action' => $action,
-                'pointable_type' => $pointable ? get_class($pointable) : null,
-                'pointable_id' => $pointable ? $pointable->id : null,
-                'description' => $this->getDescription($action, $amount),
-                'metadata' => $metadata,
-            ]);
+        try {
+            $point = DB::transaction(function () use ($user, $amount, $action, $pointable, $metadata) {
+                // ✅ Gestion du pointable : si null, on ne remplit pas les colonnes
+                $pointData = [
+                    'user_id' => $user->id,
+                    'amount' => $amount,
+                    'action' => $action,
+                    'description' => $this->getDescription($action, $amount),
+                    'metadata' => json_encode($metadata),
+                ];
+                
+                // Ajouter pointable seulement s'il existe
+                if ($pointable) {
+                    $pointData['pointable_type'] = get_class($pointable);
+                    $pointData['pointable_id'] = $pointable->id;
+                }
+                
+                $point = Point::create($pointData);
 
-            // Mettre à jour les points totaux et l'XP
-            $user->increment('total_points', $amount);
-            $user->increment('experience_points', $amount);
+                // Mettre à jour les points totaux et l'XP
+                $user->increment('total_points', $amount);
+                $user->increment('experience_points', $amount);
 
-            // Vérifier le niveau
-            $this->checkLevelUp($user);
+                // Vérifier le niveau
+                $this->checkLevelUp($user);
 
-            // Vérifier les badges
-            $this->checkBadges($user);
+                // Vérifier les badges
+                $this->checkBadges($user);
 
-            // Vérifier les achievements
-            $this->checkAchievements($user);
+                // Vérifier les achievements
+                $this->checkAchievements($user);
+
+                return $point;
+            });
 
             return $point;
-        });
-
-        return $point;
+        } catch (\Exception $e) {
+            \Log::error('Erreur lors de l\'ajout de points: ' . $e->getMessage(), [
+                'user_id' => $user->id,
+                'action' => $action,
+                'amount' => $amount,
+            ]);
+            return null;
+        }
     }
 
     /**
@@ -89,11 +114,15 @@ class GamificationService
             $user->update(['current_level' => $newLevel->level_number]);
             
             // Notification de niveau supérieur
-            $user->notify(new LevelUp($newLevel));
+            try {
+                $user->notify(new LevelUp($newLevel));
+            } catch (\Exception $e) {
+                \Log::error('Erreur notification level up: ' . $e->getMessage());
+            }
             
             // Points bonus pour le niveau supérieur
             $this->addPoints($user, 'level_up_bonus', $newLevel, [
-                'from_level' => $currentLevel->level_number,
+                'from_level' => $currentLevel->level_number ?? 1,
                 'to_level' => $newLevel->level_number,
             ]);
         }
@@ -146,7 +175,11 @@ class GamificationService
         }
 
         // Notification
-        $user->notify(new BadgeEarned($badge));
+        try {
+            $user->notify(new BadgeEarned($badge));
+        } catch (\Exception $e) {
+            \Log::error('Erreur notification badge: ' . $e->getMessage());
+        }
 
         return $userBadge;
     }
@@ -194,7 +227,11 @@ class GamificationService
                 }
                 
                 // Notification
-                $user->notify(new AchievementCompleted($achievement));
+                try {
+                    $user->notify(new AchievementCompleted($achievement));
+                } catch (\Exception $e) {
+                    \Log::error('Erreur notification achievement: ' . $e->getMessage());
+                }
             });
         }
     }
@@ -240,21 +277,42 @@ class GamificationService
      */
     public function getLeaderboard(string $type = 'points', int $limit = 50): array
     {
-        $query = User::with('badges');
+        $query = User::query();
         
-        if ($type === 'points') {
-            $query->orderBy('total_points', 'desc');
-        } elseif ($type === 'level') {
-            $query->orderBy('current_level', 'desc')
-                  ->orderBy('experience_points', 'desc');
-        } elseif ($type === 'streak') {
-            $query->orderBy('streak_days', 'desc');
-        } elseif ($type === 'badges') {
-            $query->withCount('badges')
-                  ->orderBy('badges_count', 'desc');
+        switch ($type) {
+            case 'points':
+                $query->orderBy('total_points', 'desc');
+                break;
+            case 'level':
+                $query->orderBy('current_level', 'desc')
+                      ->orderBy('experience_points', 'desc');
+                break;
+            case 'badges':
+                $query->withCount(['badges as badges_count' => function ($q) {
+                    $q->whereNotNull('earned_at');
+                }])->orderBy('badges_count', 'desc');
+                break;
+            case 'streak':
+                $query->orderBy('streak_days', 'desc');
+                break;
+            default:
+                $query->orderBy('total_points', 'desc');
         }
-
-        return $query->limit($limit)->get()->toArray();
+        
+        $users = $query->limit($limit)->get();
+        
+        return $users->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar' => $user->avatar,
+                'total_points' => $user->total_points,
+                'current_level' => $user->current_level,
+                'experience_points' => $user->experience_points,
+                'streak_days' => $user->streak_days,
+                'badges_count' => $user->badges()->whereNotNull('earned_at')->count(),
+            ];
+        })->toArray();
     }
 
     /**
@@ -275,15 +333,15 @@ class GamificationService
             'total_points' => $user->total_points,
             'current_level' => [
                 'number' => $user->current_level,
-                'name' => $currentLevel->name,
-                'icon' => $currentLevel->icon,
-                'color' => $currentLevel->color,
+                'name' => $currentLevel->name ?? 'Débutant',
+                'icon' => $currentLevel->icon ?? '🌱',
+                'color' => $currentLevel->color ?? 'green',
             ],
             'next_level' => $nextLevel ? [
                 'number' => $nextLevel->level_number,
                 'name' => $nextLevel->name,
                 'points_required' => $nextLevel->points_required,
-                'progress' => $currentLevel->getProgressToNextLevel($user->total_points),
+                'progress' => $currentLevel ? $currentLevel->getProgressToNextLevel($user->total_points) : 0,
             ] : null,
             'streak_days' => $user->streak_days,
             'badges' => [
@@ -325,6 +383,11 @@ class GamificationService
             'achievement_completed' => "Succès débloqué (+{$amount} points)",
             'first_course' => "Premier cours (+{$amount} points)",
             'first_quiz' => "Premier quiz (+{$amount} points)",
+            'forum_topic_created' => "Sujet créé (+{$amount} points)",
+            'forum_post_created' => "Réponse postée (+{$amount} points)",
+            'post_liked' => "Message aimé (+{$amount} points)",
+            'solution_marked' => "Solution marquée (+{$amount} points)",
+            'level_up_bonus' => "Niveau supérieur (+{$amount} points)",
             default => "+{$amount} points",
         };
     }

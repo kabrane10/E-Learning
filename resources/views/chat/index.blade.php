@@ -103,16 +103,24 @@
     
     <!-- Modal Nouvelle conversation -->
     <div x-show="openNewConversationModal" 
-         class="fixed inset-0 z-50 overflow-y-auto"
-         x-transition
-         style="display: none;">
+        class="fixed inset-0 z-50 overflow-y-auto"
+        x-transition
+        style="display: none;">
         <div class="flex items-center justify-center min-h-screen px-4">
             <div class="fixed inset-0 bg-gray-900 bg-opacity-50" @click="openNewConversationModal = false"></div>
             <div class="relative bg-white rounded-2xl max-w-md w-full shadow-2xl">
                 <div class="px-6 py-4 border-b border-gray-200">
                     <h3 class="text-lg font-semibold text-gray-900">Nouvelle conversation</h3>
                 </div>
-                
+            
+                <!-- Message d'erreur dans le modal -->
+                <div x-show="errorMessage" 
+                    x-transition
+                    class="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <span x-text="errorMessage"></span>
+                </div>
+            
                 <form @submit.prevent="createConversation">
                     <div class="p-6 space-y-4">
                         <!-- Type de conversation -->
@@ -123,27 +131,28 @@
                                         @click="newConversation.type = 'private'"
                                         class="py-2 px-3 rounded-lg text-sm font-medium transition-colors"
                                         :class="newConversation.type === 'private' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
-                                    <i class="fas fa-user mr-1"></i>Privé
+                                        <i class="fas fa-user mr-1"></i>Privé
                                 </button>
                                 <button type="button"
                                         @click="newConversation.type = 'course'"
                                         class="py-2 px-3 rounded-lg text-sm font-medium transition-colors"
                                         :class="newConversation.type === 'course' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
-                                    <i class="fas fa-book mr-1"></i>Cours
+                                        <i class="fas fa-book mr-1"></i>Cours
                                 </button>
                                 <button type="button"
                                         @click="newConversation.type = 'group'"
                                         class="py-2 px-3 rounded-lg text-sm font-medium transition-colors"
                                         :class="newConversation.type === 'group' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'">
-                                    <i class="fas fa-users mr-1"></i>Groupe
+                                        <i class="fas fa-users mr-1"></i>Groupe
                                 </button>
                             </div>
                         </div>
-                        
-                        <!-- Destinataire (privé) -->
-                        <div x-show="newConversation.type === 'private'">
+                    
+                    <!-- Destinataire (privé) -->
+                        <div x-show="newConversation.type === 'private'" x-cloak>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Destinataire</label>
-                            <select x-model="newConversation.user_id" required
+                            <select x-model="newConversation.user_id" 
+                                    :required="newConversation.type === 'private'"
                                     class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                                 <option value="">Sélectionner un utilisateur</option>
                                 @foreach($availableUsers ?? [] as $user)
@@ -151,11 +160,12 @@
                                 @endforeach
                             </select>
                         </div>
-                        
-                        <!-- Cours (cours) -->
-                        <div x-show="newConversation.type === 'course'">
+                    
+                        <!-- Cours -->
+                        <div x-show="newConversation.type === 'course'" x-cloak>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Cours</label>
-                            <select x-model="newConversation.course_id" required
+                            <select x-model="newConversation.course_id" 
+                                    :required="newConversation.type === 'course'"
                                     class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                                 <option value="">Sélectionner un cours</option>
                                 @foreach($availableCourses ?? [] as $course)
@@ -163,114 +173,162 @@
                                 @endforeach
                             </select>
                         </div>
-                        
+                    
                         <!-- Nom du groupe -->
-                        <div x-show="newConversation.type === 'group'">
+                        <div x-show="newConversation.type === 'group'" x-cloak>
                             <label class="block text-sm font-medium text-gray-700 mb-2">Nom du groupe</label>
                             <input type="text" 
-                                   x-model="newConversation.title" 
-                                   required
-                                   class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
-                                   placeholder="Ex: Groupe de projet">
+                                x-model="newConversation.title" 
+                                :required="newConversation.type === 'group'"
+                                class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500"
+                                placeholder="Ex: Groupe de projet">
                         </div>
                     </div>
-                    
+                
                     <div class="px-6 py-4 bg-gray-50 rounded-b-2xl flex justify-end space-x-3">
-                        <button type="button" @click="openNewConversationModal = false" 
+                        <button type="button" @click="openNewConversationModal = false; errorMessage = ''" 
                                 class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                             Annuler
                         </button>
                         <button type="submit" 
-                                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-                            Créer
+                                class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                :disabled="isLoading">
+                            <i class="fas fa-spinner fa-spin mr-2" x-show="isLoading"></i>
+                            <span x-text="isLoading ? 'Création...' : 'Créer'"></span>
                         </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
+    
 </div>
 @endsection
 
 @push('scripts')
 <script>
-    function chatIndexManager() {
-        return {
-            conversations: @json($conversations ?? []),
-            activeConversationId: null,
-            searchQuery: '',
-            openNewConversationModal: false,
-            newConversation: {
-                type: 'private',
-                user_id: '',
-                course_id: '',
-                title: ''
-            },
+   function chatIndexManager() {
+    return {
+        conversations: @json($conversations ?? []),
+        activeConversationId: null,
+        searchQuery: '',
+        openNewConversationModal: false,
+        errorMessage: '',
+        isLoading: false,
+        newConversation: {
+            type: 'private',
+            user_id: '',
+            course_id: '',
+            title: ''
+        },
+        
+        get filteredConversations() {
+            if (!this.searchQuery) return this.conversations;
+            const query = this.searchQuery.toLowerCase();
+            return this.conversations.filter(c => {
+                const name = c.type === 'private' ? (c.other_user?.name || '') : (c.title || '');
+                return name.toLowerCase().includes(query);
+            });
+        },
+        
+        init() {
+            // Réinitialiser le formulaire quand le modal s'ouvre
+            this.$watch('openNewConversationModal', (value) => {
+                if (value) {
+                    this.newConversation = {
+                        type: 'private',
+                        user_id: '',
+                        course_id: '',
+                        title: ''
+                    };
+                    this.errorMessage = '';
+                    this.isLoading = false;
+                }
+            });
             
-            get filteredConversations() {
-                if (!this.searchQuery) return this.conversations;
-                const query = this.searchQuery.toLowerCase();
-                return this.conversations.filter(c => {
-                    const name = c.type === 'private' ? (c.other_user?.name || '') : (c.title || '');
-                    return name.toLowerCase().includes(query);
-                });
-            },
-            
-            init() {
-                // Écouter les nouveaux messages via Echo
+            // Écouter les nouveaux messages via Echo
+            if (window.Echo) {
                 this.conversations.forEach(conversation => {
                     window.Echo.private(`conversation.${conversation.id}`)
                         .listen('.message.sent', (e) => {
                             this.handleNewMessage(e);
                         });
                 });
-            },
-            
-            handleNewMessage(event) {
-                const conversation = this.conversations.find(c => c.id === event.conversation_id);
-                if (conversation) {
-                    conversation.last_message = {
-                        content: event.content,
-                        user: event.user
-                    };
-                    conversation.last_message_at = event.created_at;
-                    
-                    if (conversation.id !== this.activeConversationId) {
-                        conversation.unread_count = (conversation.unread_count || 0) + 1;
-                    }
-                }
-            },
-            
-            formatTime(timestamp) {
-                if (!timestamp) return '';
-                const date = new Date(timestamp);
-                const now = new Date();
-                const diff = now - date;
-                
-                if (diff < 60000) return 'À l\'instant';
-                if (diff < 3600000) return Math.floor(diff / 60000) + ' min';
-                if (diff < 86400000) return date.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
-                return date.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' });
-            },
-            
-            getLastMessagePreview(conversation) {
-                if (!conversation.last_message) return 'Aucun message';
-                const content = conversation.last_message.content;
-                const isMine = conversation.last_message.user?.id === {{ auth()->id() }};
-                const prefix = isMine ? 'Vous : ' : '';
-                return prefix + (content.length > 30 ? content.substring(0, 30) + '...' : content);
-            },
-            
-            createConversation() {
-                const data = {
-                    type: this.newConversation.type,
-                    user_id: this.newConversation.type === 'private' ? this.newConversation.user_id : null,
-                    course_id: this.newConversation.type === 'course' ? this.newConversation.course_id : null,
-                    title: this.newConversation.type === 'group' ? this.newConversation.title : null,
-                    _token: document.querySelector('meta[name="csrf-token"]').content
+            }
+        },
+        
+        handleNewMessage(event) {
+            const conversation = this.conversations.find(c => c.id === event.conversation_id);
+            if (conversation) {
+                conversation.last_message = {
+                    content: event.content,
+                    user: event.user
                 };
+                conversation.last_message_at = event.created_at;
                 
-                fetch('{{ route("conversations.store") }}', {
+                if (conversation.id !== this.activeConversationId) {
+                    conversation.unread_count = (conversation.unread_count || 0) + 1;
+                }
+                
+                // Déplacer la conversation en haut de la liste
+                this.conversations = [
+                    conversation,
+                    ...this.conversations.filter(c => c.id !== conversation.id)
+                ];
+            }
+        },
+        
+        formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'À l\'instant';
+            if (diff < 3600000) return Math.floor(diff / 60000) + ' min';
+            if (diff < 86400000) return date.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleDateString('fr', { day: '2-digit', month: '2-digit' });
+        },
+        
+        getLastMessagePreview(conversation) {
+            if (!conversation.last_message) return 'Aucun message';
+            const content = conversation.last_message.content;
+            const isMine = conversation.last_message.user?.id === {{ auth()->id() }};
+            const prefix = isMine ? 'Vous : ' : '';
+            return prefix + (content.length > 30 ? content.substring(0, 30) + '...' : content);
+        },
+        
+        async createConversation() {
+            // Effacer les erreurs précédentes
+            this.errorMessage = '';
+            
+            // Validation manuelle
+            if (this.newConversation.type === 'private' && !this.newConversation.user_id) {
+                this.errorMessage = 'Veuillez sélectionner un destinataire.';
+                return;
+            }
+            
+            if (this.newConversation.type === 'course' && !this.newConversation.course_id) {
+                this.errorMessage = 'Veuillez sélectionner un cours.';
+                return;
+            }
+            
+            if (this.newConversation.type === 'group' && !this.newConversation.title?.trim()) {
+                this.errorMessage = 'Veuillez saisir un nom de groupe.';
+                return;
+            }
+            
+            this.isLoading = true;
+            
+            const data = {
+                type: this.newConversation.type,
+                user_id: this.newConversation.type === 'private' ? this.newConversation.user_id : null,
+                course_id: this.newConversation.type === 'course' ? this.newConversation.course_id : null,
+                title: this.newConversation.type === 'group' ? this.newConversation.title : null,
+            };
+            
+            try {
+                const response = await fetch('{{ route("conversations.store") }}', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -278,28 +336,40 @@
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify(data)
-                })
-                .then(response => {
-                    if (response.ok) {
-                        return response.json();
-                    }
-                    throw new Error('Erreur lors de la création');
-                })
-                .then(data => {
-                    if (data.redirect) {
-                        window.location.href = data.redirect;
-                    } else if (data.conversation) {
-                        window.location.href = '/chat/' + data.conversation.id;
-                    } else {
-                        window.location.reload();
-                    }
-                })
-                .catch(error => {
-                    console.error('Erreur:', error);
-                    alert('Erreur lors de la création de la conversation');
                 });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    console.error('Erreur serveur:', result);
+                    
+                    if (result.errors) {
+                        const messages = Object.values(result.errors).flat().join('<br>');
+                        this.errorMessage = messages;
+                    } else if (result.message) {
+                        this.errorMessage = result.message;
+                    } else {
+                        this.errorMessage = 'Erreur lors de la création de la conversation.';
+                    }
+                    this.isLoading = false;
+                    return;
+                }
+                
+                // Succès
+                if (result.redirect) {
+                    window.location.href = result.redirect;
+                } else if (result.conversation) {
+                    window.location.href = '/chat/' + result.conversation.id;
+                } else {
+                    window.location.reload();
+                }
+            } catch (error) {
+                console.error('Erreur réseau:', error);
+                this.errorMessage = 'Erreur de connexion. Veuillez vérifier votre connexion internet et réessayer.';
+                this.isLoading = false;
             }
         }
     }
+}
 </script>
 @endpush

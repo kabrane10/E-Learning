@@ -7,16 +7,19 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Lesson extends Model
+class Lesson extends Model implements HasMedia
 {
-    use HasFactory;
+    use HasFactory,  InteractsWithMedia;
 
     protected $fillable = [
         'course_id',
         'chapter_id',
         'title',
         'content_type',
+        'content',
         'video_path',
         'pdf_path',
         'duration',
@@ -62,14 +65,42 @@ class Lesson extends Model
         return $this->quiz()->exists();
     }
 
-    public function getVideoUrlAttribute(): ?string
+    /**
+     * Register media collections.
+     */
+    public function registerMediaCollections(): void
     {
-        return $this->video_path ? asset('storage/' . $this->video_path) : null;
+        $this->addMediaCollection('video')->singleFile();
+        $this->addMediaCollection('pdf')->singleFile();
+        $this->addMediaCollection('attachments');
     }
 
+    /**
+     * Get the video URL.
+     */
+    public function getVideoUrlAttribute(): ?string
+    {
+        // Vérifier d'abord le nouveau système Media Library
+        $mediaUrl = $this->getFirstMediaUrl('video');
+        if ($mediaUrl) return $mediaUrl;
+        
+        // Fallback sur l'ancien champ
+        if ($this->video_path) return asset('storage/' . $this->video_path);
+        
+        return null;
+    }
+
+    /**
+     * Get the PDF URL.
+     */
     public function getPdfUrlAttribute(): ?string
     {
-        return $this->pdf_path ? asset('storage/' . $this->pdf_path) : null;
+        $mediaUrl = $this->getFirstMediaUrl('pdf');
+        if ($mediaUrl) return $mediaUrl;
+        
+        if ($this->pdf_path) return asset('storage/' . $this->pdf_path);
+        
+        return null;
     }
 
     public function getIconAttribute(): string
@@ -82,4 +113,17 @@ class Lesson extends Model
             default => 'fa-file'
         };
     }
+
+     // ✅ Accesseur pour compatibilité avec l'ancien nom 'type'
+     public function getTypeAttribute(): string
+     {
+         return $this->content_type ?? 'video';
+     }
+ 
+     // ✅ Mutateur pour compatibilité
+     public function setTypeAttribute($value): void
+     {
+         $this->attributes['content_type'] = $value;
+     }
+ 
 }

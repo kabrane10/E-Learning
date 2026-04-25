@@ -162,7 +162,7 @@
                                 </td>
                                 <td class="px-6 py-4 text-right">
                                     <div class="flex items-center justify-end space-x-2">
-                                        <a href="{{ route('forum.topics.show', [$topic->category->slug ?? 'general', $topic->slug]) }}" 
+                                        <a href="{{ route('admin.forum.topics.show', $topic) }}" 
                                            target="_blank"
                                            class="text-gray-400 hover:text-indigo-600"
                                            title="Voir">

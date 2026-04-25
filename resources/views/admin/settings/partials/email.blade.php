@@ -57,7 +57,7 @@
                         class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
                     <option value="tls" {{ ($settings['mail_encryption'] ?? 'tls') == 'tls' ? 'selected' : '' }}>TLS</option>
                     <option value="ssl" {{ ($settings['mail_encryption'] ?? '') == 'ssl' ? 'selected' : '' }}>SSL</option>
-                    <option value="">{{ ($settings['mail_encryption'] ?? '') == '' ? 'selected' : '' }}>Aucun</option>
+                    <option value="" {{ ($settings['mail_encryption'] ?? '') == '' ? 'selected' : '' }}>Aucun</option>
                 </select>
             </div>
         </div>
@@ -121,14 +121,17 @@
         resultEl.className = 'text-xs text-yellow-500 mt-2';
         
         try {
-            const response = await fetch('{{ route("admin.settings.test-email") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                },
-                body: JSON.stringify({ test_email: email })
-            });
+            // ✅ CORRECTION : Utiliser la route admin complète
+            async function testEmail() {
+    // ...
+    const response = await fetch('/admin/settings/test-email', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ test_email: email })
+    });
             
             const data = await response.json();
             

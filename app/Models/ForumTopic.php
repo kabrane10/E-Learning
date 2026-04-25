@@ -150,11 +150,77 @@ class ForumTopic extends Model
     }
 
     /**
+     * Notify all subscribers of a new reply.
+     * Cette méthode est appelée depuis ForumPost lorsqu'un nouveau message est créé.
+     */
+    public function notifySubscribers(ForumPost $post): void
+    {
+        // Récupérer tous les abonnés sauf l'auteur du post
+        $subscribers = $this->subscriptions()
+            ->with('user')
+            ->where('user_id', '!=', $post->user_id)
+            ->get();
+
+        foreach ($subscribers as $subscription) {
+            // Vérifier le type d'abonnement
+            if ($subscription->type === 'instant') {
+                // Notification immédiate
+                $this->sendNotification($subscription->user, $post);
+            } elseif ($subscription->type === 'daily') {
+                // Stocker pour envoi quotidien (à implémenter)
+                $this->queueDailyNotification($subscription->user, $post);
+            } elseif ($subscription->type === 'weekly') {
+                // Stocker pour envoi hebdomadaire (à implémenter)
+                $this->queueWeeklyNotification($subscription->user, $post);
+            }
+        }
+    }
+
+    /**
+     * Send immediate notification to a user.
+     */
+    private function sendNotification(User $user, ForumPost $post): void
+    {
+        try {
+            // Notification dans l'application
+            $user->notify(new \App\Notifications\NewForumReply($post));
+            
+            // Mise à jour de la date de dernière notification
+            $this->subscriptions()
+                ->where('user_id', $user->id)
+                ->update(['last_notified_at' => now()]);
+                
+        } catch (\Exception $e) {
+            \Log::error('Erreur envoi notification forum: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Queue daily notification.
+     */
+    private function queueDailyNotification(User $user, ForumPost $post): void
+    {
+        // À implémenter : stocker dans une table de notifications différées
+        // Pour l'instant, on envoie quand même
+        $this->sendNotification($user, $post);
+    }
+
+    /**
+     * Queue weekly notification.
+     */
+    private function queueWeeklyNotification(User $user, ForumPost $post): void
+    {
+        // À implémenter : stocker dans une table de notifications différées
+        // Pour l'instant, on envoie quand même
+        $this->sendNotification($user, $post);
+    }
+
+    /**
      * Get an excerpt with custom length.
-     * Méthode séparée pour les cas où une longueur personnalisée est nécessaire.
      */
     public function excerpt(int $length = 200): string
     {
         return Str::limit(strip_tags($this->content), $length);
     }
+
 }

@@ -6,17 +6,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Course;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ChatController extends Controller
 {
     /**
-     * Display chat statistics and management.
+     * Display chat dashboard.
      */
     public function index()
     {
-        // Statistiques générales
         $stats = [
             'total_conversations' => Conversation::count(),
             'private_conversations' => Conversation::where('type', 'private')->count(),
@@ -28,23 +28,14 @@ class ChatController extends Controller
             'total_participants' => DB::table('participants')->count(),
         ];
 
-        // Conversations récentes
         $recentConversations = Conversation::with(['creator', 'course'])
             ->withCount(['messages', 'participants'])
             ->orderBy('last_message_at', 'desc')
             ->limit(10)
             ->get();
 
-        // Utilisateurs les plus actifs dans le chat
-        $activeUsers = User::withCount(['messages' => function ($query) {
-                $query->where('created_at', '>=', now()->subDays(30));
-            }])
-            ->having('messages_count', '>', 0)
-            ->orderBy('messages_count', 'desc')
-            ->limit(10)
-            ->get();
+        $activeUsers = $this->getActiveUsers();
 
-        // Activité par jour (30 derniers jours)
         $dailyActivity = Message::select(
                 DB::raw('DATE(created_at) as date'),
                 DB::raw('COUNT(*) as count')
@@ -58,14 +49,39 @@ class ChatController extends Controller
     }
 
     /**
+     * Get active users (compatible SQLite).
+     */
+    private function getActiveUsers()
+    {
+        $users = User::whereIn('id', function ($query) {
+                $query->select('user_id')
+                    ->from('messages')
+                    ->where('created_at', '>=', now()->subDays(30))
+                    ->whereNull('deleted_at')
+                    ->distinct();
+            })
+            ->get();
+        
+        foreach ($users as $user) {
+            $user->messages_count = Message::where('user_id', $user->id)
+                ->where('created_at', '>=', now()->subDays(30))
+                ->count();
+        }
+        
+        return $users->sortByDesc('messages_count')->take(10)->values();
+    }
+
+    /**
      * Display all conversations.
      */
     public function conversations(Request $request)
     {
-        $query = Conversation::with(['creator', 'course'])
-            ->withCount(['messages', 'participants']);
+        $query = Conversation::with(['creator', 'course']);
+        
+        $query->select('conversations.*')
+            ->selectRaw('(SELECT COUNT(*) FROM messages WHERE messages.conversation_id = conversations.id AND messages.deleted_at IS NULL) as messages_count')
+            ->selectRaw('(SELECT COUNT(*) FROM participants WHERE participants.conversation_id = conversations.id) as participants_count');
 
-        // Filtres
         if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
@@ -81,6 +97,66 @@ class ChatController extends Controller
         $conversations = $query->orderBy('last_message_at', 'desc')->paginate(20);
 
         return view('admin.chat.conversations', compact('conversations'));
+    }
+
+    /**
+     * Show form to create a conversation.
+     */
+    public function createConversation()
+    {
+        $users = User::where('id', '!=', auth()->id())->get();
+        $courses = Course::where('is_published', true)->get();
+        
+        return view('admin.chat.conversations.create', compact('users', 'courses'));
+    }
+
+    /**
+     * Store a new conversation.
+     */
+    public function storeConversation(Request $request)
+    {
+        $validated = $request->validate([
+            'type' => 'required|in:private,course,group',
+            'user_id' => 'required_if:type,private|exists:users,id',
+            'course_id' => 'required_if:type,course|exists:courses,id',
+            'title' => 'required_if:type,group|string|max:255',
+        ]);
+
+        $conversation = Conversation::create([
+            'type' => $validated['type'],
+            'course_id' => $validated['course_id'] ?? null,
+            'title' => $validated['title'] ?? null,
+            'created_by' => auth()->id(),
+            'last_message_at' => now(),
+        ]);
+
+        $conversation->participants()->create([
+            'user_id' => auth()->id(),
+            'role' => 'admin',
+            'joined_at' => now(),
+        ]);
+
+        if ($validated['type'] === 'private' && isset($validated['user_id'])) {
+            $conversation->participants()->create([
+                'user_id' => $validated['user_id'],
+                'role' => 'member',
+                'joined_at' => now(),
+            ]);
+        }
+
+        if ($validated['type'] === 'course' && isset($validated['course_id'])) {
+            $course = Course::find($validated['course_id']);
+            if ($course && $course->instructor_id) {
+                $conversation->participants()->create([
+                    'user_id' => $course->instructor_id,
+                    'role' => 'admin',
+                    'joined_at' => now(),
+                ]);
+            }
+        }
+
+        return redirect()->route('admin.chat.conversations.show', $conversation)
+            ->with('success', 'Conversation créée avec succès !');
     }
 
     /**
@@ -102,7 +178,45 @@ class ChatController extends Controller
             'last_message_at' => $conversation->last_message_at,
         ];
 
-        return view('admin.chat.show', compact('conversation', 'messages', 'stats'));
+        return view('admin.chat.conversations.show', compact('conversation', 'messages', 'stats'));
+    }
+
+    /**
+     * Show form to edit a conversation.
+     */
+    public function editConversation(Conversation $conversation)
+    {
+        $users = User::where('id', '!=', auth()->id())->get();
+        $courses = Course::where('is_published', true)->get();
+        
+        return view('admin.chat.conversations.edit', compact('conversation', 'users', 'courses'));
+    }
+
+    /**
+     * Update a conversation.
+     */
+    public function updateConversation(Request $request, Conversation $conversation)
+    {
+        $validated = $request->validate([
+            'title' => 'nullable|string|max:255',
+            'course_id' => 'nullable|exists:courses,id',
+        ]);
+
+        $conversation->update($validated);
+
+        return redirect()->route('admin.chat.conversations.show', $conversation)
+            ->with('success', 'Conversation mise à jour avec succès !');
+    }
+
+    /**
+     * Delete a conversation.
+     */
+    public function destroyConversation(Conversation $conversation)
+    {
+        $conversation->delete();
+
+        return redirect()->route('admin.chat.conversations.index')
+            ->with('success', 'Conversation supprimée avec succès.');
     }
 
     /**
@@ -112,7 +226,6 @@ class ChatController extends Controller
     {
         $query = Message::with(['user', 'conversation']);
 
-        // Filtres
         if ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
@@ -132,53 +245,14 @@ class ChatController extends Controller
 
         $messages = $query->orderBy('created_at', 'desc')->paginate(30);
         
-        $users = User::has('messages')->get();
+        $users = User::whereIn('id', function ($q) {
+            $q->select('user_id')->from('messages')->distinct();
+        })->get();
+        
         $conversations = Conversation::all();
 
         return view('admin.chat.messages', compact('messages', 'users', 'conversations'));
     }
-
-    /**
- * Store a new conversation.
- */
-public function storeConversation(Request $request)
-{
-    $validated = $request->validate([
-        'type' => 'required|in:private,course,group',
-        'user_id' => 'required_if:type,private|exists:users,id',
-        'course_id' => 'required_if:type,course|exists:courses,id',
-        'title' => 'required_if:type,group|string|max:255',
-    ]);
-
-    $conversation = Conversation::create([
-        'type' => $validated['type'],
-        'course_id' => $validated['course_id'] ?? null,
-        'title' => $validated['title'] ?? null,
-        'created_by' => auth()->id(),
-        'last_message_at' => now(),
-    ]);
-
-    // Ajouter le créateur
-    $conversation->addParticipant(auth()->id(), 'admin');
-
-    // Ajouter les participants selon le type
-    if ($validated['type'] === 'private' && isset($validated['user_id'])) {
-        $conversation->addParticipant($validated['user_id']);
-    }
-
-    if ($validated['type'] === 'course' && isset($validated['course_id'])) {
-        $course = Course::find($validated['course_id']);
-        foreach ($course->students as $student) {
-            $conversation->addParticipant($student->id);
-        }
-        $conversation->addParticipant($course->instructor_id, 'admin');
-    }
-
-    return response()->json([
-        'success' => true,
-        'redirect' => route('admin.chat.conversations.show', $conversation)
-    ]);
-}
 
     /**
      * Delete a message.
@@ -188,17 +262,6 @@ public function storeConversation(Request $request)
         $message->delete();
 
         return back()->with('success', 'Message supprimé avec succès.');
-    }
-
-    /**
-     * Delete a conversation.
-     */
-    public function destroyConversation(Conversation $conversation)
-    {
-        $conversation->delete();
-
-        return redirect()->route('admin.chat.conversations')
-            ->with('success', 'Conversation supprimée avec succès.');
     }
 
     /**
@@ -223,7 +286,6 @@ public function storeConversation(Request $request)
             'message_retention_days' => 'required|integer|min:1|max:365',
         ]);
 
-        // Sauvegarder les paramètres (à adapter selon votre système de settings)
         foreach ($validated as $key => $value) {
             \App\Models\Setting::set('chat_' . $key, $value);
         }
@@ -242,7 +304,7 @@ public function storeConversation(Request $request)
             'stats' => [
                 'total_conversations' => Conversation::count(),
                 'total_messages' => Message::count(),
-                'active_users' => User::has('messages', '>=', 1)->count(),
+                'active_users' => User::whereIn('id', fn($q) => $q->select('user_id')->from('messages')->distinct())->count(),
             ],
             'exported_at' => now()->toISOString(),
         ];
@@ -253,7 +315,6 @@ public function storeConversation(Request $request)
             ]);
         }
 
-        // Export CSV
         $filename = 'chat-stats-' . date('Y-m-d') . '.csv';
         $headers = [
             'Content-Type' => 'text/csv',

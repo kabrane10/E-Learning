@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ForumCategory;
 use App\Models\ForumTopic;
-use App\Models\ForumPost;  // ← AJOUTER CETTE LIGNE
+use App\Models\ForumPost;  
 use App\Models\User;
 use Illuminate\Http\Request;
 

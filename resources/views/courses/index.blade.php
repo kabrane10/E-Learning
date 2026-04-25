@@ -2,150 +2,200 @@
 
 @section('title', 'Catalogue des cours')
 
+@push('styles')
+<style>
+    .course-card {
+        transition: all 0.3s ease;
+    }
+    .course-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+    }
+    .course-card:hover .course-img {
+        transform: scale(1.05);
+    }
+    .course-img {
+        transition: transform 0.5s ease;
+    }
+    .level-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .level-beginner { background: #d1fae5; color: #065f46; }
+    .level-intermediate { background: #fef3c7; color: #92400e; }
+    .level-advanced { background: #fee2e2; color: #991b1b; }
+    .price-tag { font-size: 1.25rem; font-weight: 700; }
+    .free-tag { color: #059669; }
+    .paid-tag { color: #d97706; }
+</style>
+@endpush
+
 @section('content')
-<div class="bg-gradient-to-br from-indigo-50 to-purple-50 py-12">
+<div class="bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 min-h-screen py-10">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- En-tête -->
-        <div class="text-center mb-12">
-            <h1 class="text-4xl font-bold text-gray-900 mb-4">Explorez nos cours</h1>
-            <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-                Développez vos compétences avec des cours créés par des experts
+        
+        {{-- En-tête --}}
+        <div class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-gray-900 mb-3">
+                Explorez nos <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">cours</span>
+            </h1>
+            <p class="text-lg text-gray-500 max-w-2xl mx-auto">
+                Développez vos compétences avec des cours créés par des experts passionnés
             </p>
         </div>
         
-        <!-- Filtres -->
-        <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
-            <form action="{{ route('courses.index') }}" method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {{-- Filtres --}}
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-8">
+            <form action="{{ route('courses.index') }}" method="GET" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Recherche</label>
-                    <input type="text" 
-                           name="q" 
-                           value="{{ request('q') }}"
-                           placeholder="Rechercher un cours..."
-                           class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Recherche</label>
+                    <div class="relative">
+                        <input type="text" name="q" value="{{ request('q') }}" placeholder="Mot-clé..."
+                               class="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        <i class="fas fa-search absolute left-3.5 top-3.5 text-gray-400"></i>
+                    </div>
                 </div>
-                
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Catégorie</label>
-                    <select name="category" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">Toutes les catégories</option>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Catégorie</label>
+                    <select name="category" class="w-full py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        <option value="">Toutes</option>
                         @foreach($categories as $cat)
-                            <option value="{{ $cat }}" {{ request('category') == $cat ? 'selected' : '' }}>
-                                {{ $cat }}
-                            </option>
+                            <option value="{{ $cat }}" {{ request('category') == $cat ? 'selected' : '' }}>{{ $cat }}</option>
                         @endforeach
                     </select>
                 </div>
-                
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Niveau</label>
-                    <select name="level" class="w-full rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">Tous les niveaux</option>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wider">Niveau</label>
+                    <select name="level" class="w-full py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
+                        <option value="">Tous</option>
                         <option value="beginner" {{ request('level') == 'beginner' ? 'selected' : '' }}>Débutant</option>
                         <option value="intermediate" {{ request('level') == 'intermediate' ? 'selected' : '' }}>Intermédiaire</option>
                         <option value="advanced" {{ request('level') == 'advanced' ? 'selected' : '' }}>Avancé</option>
                     </select>
                 </div>
-                
-                <div class="flex items-end">
-                    <button type="submit" class="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                <div class="flex items-end gap-2">
+                    <button type="submit" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors text-sm font-medium">
                         <i class="fas fa-filter mr-2"></i>Filtrer
                     </button>
+                    @if(request()->anyFilled(['q', 'category', 'level']))
+                        <a href="{{ route('courses.index') }}" class="px-4 py-2.5 text-gray-500 hover:text-gray-700 border border-gray-300 rounded-xl text-sm">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    @endif
                 </div>
             </form>
         </div>
         
-        <!-- Résultats -->
-        <div class="mb-4 text-gray-600">
-            {{ $courses->total() }} cours trouvés
+        {{-- Résultats --}}
+        <div class="flex items-center justify-between mb-6">
+            <p class="text-sm text-gray-500">{{ $courses->total() }} cours trouvé(s)</p>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-400">Trier par :</span>
+                <select class="text-sm border-gray-200 rounded-lg py-1.5 focus:ring-indigo-500">
+                    <option>Plus récents</option>
+                    <option>Plus populaires</option>
+                    <option>Mieux notés</option>
+                </select>
+            </div>
         </div>
         
-        <!-- Grille des cours -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {{-- Grille des cours --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @forelse($courses as $course)
-                <div class="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden group">
-                    <a href="{{ route('courses.show', $course) }}">
-                        <div class="relative">
-                            <img src="{{ $course->thumbnail_url }}" 
+                <div class="course-card bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden group">
+                    <a href="{{ route('courses.show', $course) }}" class="block">
+                        {{-- Image --}}
+                        <div class="relative overflow-hidden h-48">
+                            <img src="{{ $course->thumbnail_url ?? 'https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=500' }}" 
                                  alt="{{ $course->title }}" 
-                                 class="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300">
+                                 class="course-img w-full h-full object-cover">
                             
-                            <!-- Badge de niveau -->
-                            <span class="absolute top-3 left-3 px-3 py-1 text-xs font-medium rounded-full 
-                                       {{ $course->level === 'beginner' ? 'bg-green-100 text-green-800' : 
-                                          ($course->level === 'intermediate' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800') }}">
-                                {{ ucfirst($course->level) }}
+                            {{-- ✅ Badge Niveau (top left) --}}
+                            <span class="absolute top-3 left-3 level-badge 
+                                       {{ $course->level === 'beginner' ? 'level-beginner' : ($course->level === 'intermediate' ? 'level-intermediate' : 'level-advanced') }}">
+                                <i class="fas fa-signal text-xs"></i>
+                                {{ $course->level === 'beginner' ? 'Débutant' : ($course->level === 'intermediate' ? 'Intermédiaire' : 'Avancé') }}
                             </span>
                             
-                            <!-- Badge de favori -->
+                            {{-- ✅ Badge Prix (top right) --}}
+                            @if($course->is_free)
+                                <span class="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold text-green-600 shadow-sm">
+                                    <i class="fas fa-gift"></i> Gratuit
+                                </span>
+                            @else
+                                <span class="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 bg-white/90 backdrop-blur-sm rounded-lg text-xs font-semibold text-amber-600 shadow-sm">
+                                    {{ number_format($course->price, 0, ',', ' ') }} FCFA
+                                </span>
+                            @endif
+                            
+                            {{-- Favori --}}
                             @auth
-                                <button class="bookmark-btn absolute top-3 right-3 p-2 bg-white rounded-full shadow-md hover:scale-110 transition-transform"
-                                        data-course-id="{{ $course->id }}">
+                                <button class="bookmark-btn absolute bottom-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform"
+                                        data-course-id="{{ $course->id }}" onclick="event.preventDefault(); event.stopPropagation();">
                                     <i class="far fa-bookmark text-gray-600"></i>
                                 </button>
                             @endauth
                         </div>
                         
-                        <div class="p-6">
-                            <div class="flex items-center text-sm text-gray-500 mb-3">
-                                <span class="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-medium">
-                                    {{ $course->category }}
-                                </span>
-                                <span class="mx-2">•</span>
-                                <span><i class="far fa-clock mr-1"></i>{{ $course->formatted_duration }}</span>
-                            </div>
+                        {{-- Contenu --}}
+                        <div class="p-5">
+                            {{-- Catégorie --}}
+                            <span class="inline-block px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium mb-3">
+                                {{ $course->category }}
+                            </span>
                             
-                            <h3 class="text-xl font-semibold text-gray-900 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">
+                            {{-- Titre --}}
+                            <h3 class="text-lg font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">
                                 {{ $course->title }}
+                                
                             </h3>
                             
-                            <p class="text-gray-600 text-sm mb-4 line-clamp-2">
+                            {{-- Description --}}
+                            <p class="text-sm text-gray-500 line-clamp-2 mb-4">
                                 {{ $course->short_description }}
                             </p>
                             
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center">
-                                    <img src="{{ $course->instructor->avatar }}" 
-                                         class="w-8 h-8 rounded-full mr-2">
-                                    <span class="text-sm text-gray-600">{{ $course->instructor->name }}</span>
-                                </div>
-                                <div class="flex items-center">
-                                    <div class="flex text-yellow-400">
-                                        @for($i = 1; $i <= 5; $i++)
-                                            @if($i <= round($course->average_rating))
-                                                ★
-                                            @else
-                                                ☆
-                                            @endif
-                                        @endfor
-                                    </div>
-                                    <span class="text-sm text-gray-500 ml-1">({{ $course->reviews_count }})</span>
-                                </div>
-                            </div>
-                            
+                            {{-- Formateur + Note --}}
                             <div class="flex items-center justify-between pt-4 border-t border-gray-100">
-                                <span class="text-2xl font-bold text-gray-900">Gratuit</span>
-                                <a href="{{ route('courses.show', $course) }}" 
-                                   class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm">
-                                    Voir le cours
-                                </a>
+                                <div class="flex items-center gap-2">
+                                    <img src="{{ $course->instructor->avatar ?? 'https://ui-avatars.com/api/?name=' . urlencode($course->instructor->name) }}" 
+                                         class="w-7 h-7 rounded-full">
+                                    <span class="text-xs text-gray-600">{{ $course->instructor->name }}</span>
+                                </div>
+                                <div class="flex items-center gap-1">
+                                    <i class="fas fa-star text-yellow-400 text-xs"></i>
+                                    <span class="text-xs font-medium text-gray-700">{{ number_format($course->average_rating ?? 0, 1) }}</span>
+                                    <span class="text-xs text-gray-400">({{ $course->reviews_count ?? 0 }})</span>
+                                </div>
                             </div>
                         </div>
                     </a>
                 </div>
             @empty
-                <div class="col-span-3 py-16 text-center">
-                    <i class="fas fa-search text-6xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl font-medium text-gray-900 mb-2">Aucun cours trouvé</h3>
-                    <p class="text-gray-500">Essayez d'ajuster vos filtres de recherche</p>
+                <div class="col-span-3 py-20 text-center">
+                    <div class="w-24 h-24 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-search text-4xl text-gray-300"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-2">Aucun cours trouvé</h3>
+                    <p class="text-gray-500 mb-6">Essayez d'ajuster vos filtres ou revenez plus tard</p>
+                    <a href="{{ route('courses.index') }}" class="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700">
+                        <i class="fas fa-redo-alt mr-2"></i>Réinitialiser les filtres
+                    </a>
                 </div>
             @endforelse
         </div>
         
-        <!-- Pagination -->
-        <div class="mt-12">
-            {{ $courses->withQueryString()->links() }}
-        </div>
+        {{-- Pagination --}}
+        @if($courses->hasPages())
+            <div class="mt-10">
+                {{ $courses->withQueryString()->links() }}
+            </div>
+        @endif
     </div>
 </div>
 @endsection
@@ -153,7 +203,6 @@
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Gestion des favoris
         document.querySelectorAll('.bookmark-btn').forEach(btn => {
             btn.addEventListener('click', async function(e) {
                 e.preventDefault();

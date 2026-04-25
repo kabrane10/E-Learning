@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use Illuminate\Support\Str;
 
 class Course extends Model implements HasMedia
 {
@@ -19,166 +20,302 @@ class Course extends Model implements HasMedia
         'instructor_id',
         'title',
         'slug',
+        'category',     
+        'level',
+        'is_free',
+        'price',
         'short_description',
         'description',
-        'level',
-        'category',
+        'learning_outcomes',
+        'prerequisites',
+        'target_audience',
         'is_published',
     ];
 
     protected $casts = [
+        'is_free' => 'boolean',
         'is_published' => 'boolean',
+        'price' => 'float',
+        'learning_outcomes' => 'array',
+        'prerequisites' => 'array',
     ];
 
-    // ==================== RELATIONS ====================
-    
+    /**
+     * Boot the model.
+     */
+    protected static function booted()
+    {
+        static::creating(function ($course) {
+            if (!$course->slug) {
+                $course->slug = Str::slug($course->title) . '-' . Str::random(6);
+            }
+        });
+    }
+
+    /**
+     * Get resources.
+     */
+    public function getResourcesAttribute()
+    {
+        return $this->getMedia('resources');
+    }
+
+    /**
+     * Get the instructor that owns the course.
+     */
     public function instructor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'instructor_id');
     }
 
-    public function chapters(): HasMany
+    /**
+     * Get the students enrolled in the course.
+     */
+    public function students(): BelongsToMany
     {
-        return $this->hasMany(Chapter::class)->orderBy('order');
+        return $this->belongsToMany(User::class, 'enrollments')
+            ->withPivot('progress_percentage', 'completed_at', 'created_at as enrolled_at')
+            ->withTimestamps();
     }
 
-    public function lessons(): HasMany
-    {
-        return $this->hasMany(Lesson::class)->orderBy('order');
-    }
-
+    /**
+     * Get the enrollments for the course.
+     */
     public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
     }
 
-    public function students(): BelongsToMany
+    /**
+     * Get the lessons for the course.
+     */
+    public function lessons(): HasMany
     {
-        return $this->belongsToMany(User::class, 'enrollments')
-                    ->withPivot('progress_percentage', 'completed_at')
-                    ->withTimestamps();
+        return $this->hasMany(Lesson::class)->orderBy('order');
     }
 
-    public function bookmarks(): HasMany
+    /**
+     * Get the chapters for the course.
+     */
+    public function chapters(): HasMany
     {
-        return $this->hasMany(Bookmark::class);
+        return $this->hasMany(Chapter::class)->orderBy('order');
     }
 
+    /**
+     * Get the reviews for the course.
+     */
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
     }
 
-    // ==================== MEDIA LIBRARY ====================
-    
+    /**
+     * Register media collections.
+     */
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('thumbnail')
-             ->singleFile()
-             ->useFallbackUrl('/images/default-course.jpg')
-             ->registerMediaConversions(function (Media $media) {
-                 $this->addMediaConversion('thumb')
-                      ->width(368)
-                      ->height(232)
-                      ->sharpen(10);
-                 $this->addMediaConversion('card')
-                      ->width(736)
-                      ->height(464);
-             });
+        $this->addMediaCollection('thumbnail')->singleFile();
+        $this->addMediaCollection('promo_video')->singleFile();
+        $this->addMediaCollection('resources');
     }
 
-    // ==================== ACCESSORS ====================
+    /**
+     * Register media conversions.
+     */
+    public function registerMediaConversions(Media $media = null): void
+    {
+        $this->addMediaConversion('thumb')
+            ->width(368)
+            ->height(232)
+            ->sharpen(10);
+            
+        $this->addMediaConversion('card')
+            ->width(736)
+            ->height(464);
+    }
+
+    /**
+ * Get the thumbnail URL.
+ */
+   public function getThumbnailUrlAttribute(): string
+   {
+       $media = $this->getFirstMedia('thumbnail');
     
-    public function getThumbnailUrlAttribute(): string
+       if ($media) {
+           // ✅ URL absolue
+           return asset('storage/' . $media->id . '/' . $media->file_name);
+       }
+    
+       // Fallback
+       return 'https://images.unsplash.com/photo-1587620962725-abab7fe55159?w=400';
+   }
+
+    /**
+     * Get the promo video URL.
+     */
+    public function getPromoVideoUrlAttribute(): ?string
     {
-        return $this->getFirstMediaUrl('thumbnail', 'card') ?: '/images/default-course.jpg';
+        return $this->getFirstMediaUrl('promo_video') ?: null;
     }
 
-    public function getAverageRatingAttribute(): float
+    /**
+     * Get the students count attribute.
+     */
+    public function getStudentsCountAttribute(): int
     {
-        return round($this->reviews()->avg('rating') ?? 0, 1);
+        return $this->students()->count();
     }
 
+    /**
+     * Get the lessons count attribute.
+     */
+    public function getLessonsCountAttribute(): int
+    {
+        return $this->lessons()->count();
+    }
+
+    /**
+     * Get the reviews count attribute.
+     */
     public function getReviewsCountAttribute(): int
     {
         return $this->reviews()->count();
     }
 
-    public function getTotalDurationAttribute(): int
+    /**
+     * Get the average rating attribute.
+     */
+    public function getAverageRatingAttribute(): ?float
     {
-        return $this->lessons()->sum('duration');
+        return $this->reviews()->avg('rating');
     }
 
-    public function getFormattedDurationAttribute(): string
+    /**
+     * Get the completion rate attribute.
+     */
+    public function getCompletionRateAttribute(): float
     {
-        $totalSeconds = $this->total_duration;
-        
-        if ($totalSeconds === 0) {
-            return '0min';
+        $total = $this->students_count;
+        if ($total === 0) {
+            return 0;
         }
-        
-        $totalMinutes = floor($totalSeconds / 60);
-        $hours = floor($totalMinutes / 60);
-        $minutes = $totalMinutes % 60;
-        
-        if ($hours > 0) {
-            return $hours . 'h ' . ($minutes > 0 ? $minutes . 'min' : '');
+
+        $completed = $this->students()
+            ->whereNotNull('enrollments.completed_at')
+            ->count();
+
+        return round(($completed / $total) * 100);
+    }
+
+    /**
+     * Check if user is enrolled in the course.
+     */
+    public function isUserEnrolled(?User $user): bool
+    {
+        if (!$user) {
+            return false;
         }
-        
-        return $minutes . 'min';
+
+        return $this->students()->where('user_id', $user->id)->exists();
     }
 
-    // ==================== MÉTHODES UTILITAIRES ====================
-    
-    public function isBookmarkedByUser($userId): bool
+    /**
+     * Get the user's progress in the course.
+     */
+    public function getUserProgress(?User $user): int
     {
-        return $this->bookmarks()->where('user_id', $userId)->exists();
-    }
+        if (!$user) {
+            return 0;
+        }
 
-    public function getUserProgress($userId): int
-    {
-        $enrollment = $this->enrollments()
-            ->where('user_id', $userId)
-            ->first();
-            
+        $enrollment = $this->enrollments()->where('user_id', $user->id)->first();
         return $enrollment ? $enrollment->progress_percentage : 0;
     }
 
-    public function getUserReview($userId): ?Review
+    /**
+     * Get formatted price.
+     */
+    public function getFormattedPriceAttribute(): string
     {
-        return $this->reviews()->where('user_id', $userId)->first();
+        if ($this->is_free) {
+            return 'Gratuit';
+        }
+        return number_format($this->price, 2) . ' FCFA';
     }
 
-    public function isUserEnrolled($userId): bool
+    /**
+     * Get level label.
+     */
+    public function getLevelLabelAttribute(): string
     {
-        return $this->enrollments()->where('user_id', $userId)->exists();
+        return match($this->level) {
+            'beginner' => 'Débutant',
+            'intermediate' => 'Intermédiaire',
+            'advanced' => 'Avancé',
+            default => $this->level,
+        };
     }
 
-    public function getEnrollmentForUser($userId): ?Enrollment
+    /**
+     * Get status label.
+     */
+    public function getStatusLabelAttribute(): string
     {
-        return $this->enrollments()->where('user_id', $userId)->first();
+        return $this->is_published ? 'Publié' : 'Brouillon';
     }
 
-    // ==================== BOOT ====================
-    
-    protected static function booted(): void
+    /**
+     * Get status color.
+     */
+    public function getStatusColorAttribute(): string
     {
-        // Génération automatique du slug
-        static::creating(function ($course) {
-            if (empty($course->slug)) {
-                $course->slug = \Illuminate\Support\Str::slug($course->title);
-            }
-        });
+        return $this->is_published ? 'green' : 'yellow';
+    }
+
+    /**
+ * Get all quizzes for this course (via lessons).
+ */
+public function quizzes()
+{
+    return $this->hasManyThrough(Quiz::class, Lesson::class);
+}
+  
+      /**
+     * Check if a user has access to this course.
+     */
+    public function isAccessibleBy(?User $user): bool
+    {
+        // Cours publié
+        if (!$this->is_published) {
+            return false;
+        }
         
-        static::updating(function ($course) {
-            if ($course->isDirty('title') && !$course->isDirty('slug')) {
-                $course->slug = \Illuminate\Support\Str::slug($course->title);
-            }
-        });
-
-        // Supprimer les médias lors de la suppression du cours
-        static::deleting(function ($course) {
-            $course->clearMediaCollection('thumbnail');
-        });
+        // Cours gratuit : accessible à tous
+        if ($this->is_free) {
+            return true;
+        }
+        
+        // Cours payant : vérifier l'inscription
+        if (!$user) {
+            return false;
+        }
+        
+        // L'instructeur a toujours accès
+        if ($user->id === $this->instructor_id) {
+            return true;
+        }
+        
+        // Admin a toujours accès
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+        
+        // Vérifier si l'étudiant est inscrit (a payé)
+        return $this->students()
+            ->where('user_id', $user->id)
+            ->exists();
     }
+
+
 }

@@ -106,30 +106,41 @@
         
         <!-- Statistiques -->
         <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Répartition des cours</h3>
-                <canvas id="categoriesDistributionChart" height="250"></canvas>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">Répartition des cours</h3>
+                </div>
+                <div class="p-6">
+                    {{-- ✅ Conteneur avec hauteur fixe pour le canvas --}}
+                    <div style="position: relative; height: 250px; width: 100%;">
+                        <canvas id="categoriesDistributionChart"></canvas>
+                    </div>
+                </div>
             </div>
             
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <h3 class="text-lg font-semibold text-gray-900 mb-4">Catégories populaires</h3>
-                <div class="space-y-4">
-                    @foreach(array_slice($categories, 0, 5) as $cat)
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <div class="w-8 h-8 bg-{{ $cat['color'] }}-100 rounded-lg flex items-center justify-center">
-                                    <i class="fas fa-{{ $cat['icon'] }} text-{{ $cat['color'] }}-600 text-sm"></i>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">Catégories populaires</h3>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-4">
+                        @foreach(array_slice($categories, 0, 5) as $cat)
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 bg-{{ $cat['color'] }}-100 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-{{ $cat['icon'] }} text-{{ $cat['color'] }}-600 text-sm"></i>
+                                    </div>
+                                    <span class="font-medium text-gray-900">{{ $cat['name'] }}</span>
                                 </div>
-                                <span class="font-medium text-gray-900">{{ $cat['name'] }}</span>
-                            </div>
-                            <div class="flex items-center space-x-4">
-                                <span class="text-sm text-gray-500">{{ $cat['courses_count'] }} cours</span>
-                                <div class="w-20 bg-gray-200 rounded-full h-2">
-                                    <div class="bg-indigo-600 h-2 rounded-full" style="width: {{ ($cat['courses_count'] / 24) * 100 }}%"></div>
+                                <div class="flex items-center space-x-4">
+                                    <span class="text-sm text-gray-500">{{ $cat['courses_count'] }} cours</span>
+                                    <div class="w-20 bg-gray-200 rounded-full h-2">
+                                        <div class="bg-indigo-600 h-2 rounded-full" style="width: {{ ($cat['courses_count'] / 24) * 100 }}%"></div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    @endforeach
+                        @endforeach
+                    </div>
                 </div>
             </div>
         </div>
@@ -177,15 +188,15 @@
                             <label class="block text-sm font-medium text-gray-700 mb-2">Icône (Font Awesome)</label>
                             <select x-model="categoryForm.icon"
                                     class="w-full rounded-lg border-gray-300 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="code">Code (Développement)</option>
-                                <option value="paint-brush">Pinceau (Design)</option>
-                                <option value="bullhorn">Mégaphone (Marketing)</option>
-                                <option value="briefcase">Mallette (Business)</option>
-                                <option value="chart-line">Graphique (Data)</option>
-                                <option value="camera">Caméra (Photo)</option>
-                                <option value="music">Musique</option>
-                                <option value="language">Langues</option>
-                                <option value="mobile-alt">Mobile</option>
+                                <option value="code">💻 Code (Développement)</option>
+                                <option value="paint-brush">🎨 Pinceau (Design)</option>
+                                <option value="bullhorn">📢 Mégaphone (Marketing)</option>
+                                <option value="briefcase">💼 Mallette (Business)</option>
+                                <option value="chart-line">📈 Graphique (Data)</option>
+                                <option value="camera">📷 Caméra (Photo)</option>
+                                <option value="music">🎵 Musique</option>
+                                <option value="language">🌐 Langues</option>
+                                <option value="mobile-alt">📱 Mobile</option>
                             </select>
                         </div>
                         
@@ -261,8 +272,13 @@
 @endsection
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{-- ✅ Charger Chart.js depuis CDN --}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
 <script>
+    // Variable globale pour stocker l'instance du graphique
+    let categoriesChartInstance = null;
+    
     function categoryManager() {
         return {
             modalOpen: false,
@@ -288,12 +304,18 @@
             editCategory(id) {
                 this.editingCategory = id;
                 this.modalTitle = 'Modifier la catégorie';
-                this.categoryForm = { name: 'Développement Web', slug: 'developpement-web', icon: 'code', color: 'blue', is_active: true };
+                // Simuler le chargement des données
+                this.categoryForm = { 
+                    name: 'Développement Web', 
+                    slug: 'developpement-web', 
+                    icon: 'code', 
+                    color: 'blue', 
+                    is_active: true 
+                };
                 this.modalOpen = true;
             },
             
             toggleStatus(id) {
-                // Logique d'activation/désactivation
                 alert('Statut de la catégorie modifié');
             },
             
@@ -314,30 +336,71 @@
         }
     }
     
-    // Graphique de distribution
+    // ✅ Initialisation du graphique après le chargement complet du DOM
     document.addEventListener('DOMContentLoaded', function() {
-        const ctx = document.getElementById('categoriesDistributionChart').getContext('2d');
-        new Chart(ctx, {
+        // Vérifier que Chart.js est bien chargé
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js non chargé !');
+            return;
+        }
+        
+        const canvas = document.getElementById('categoriesDistributionChart');
+        if (!canvas) {
+            console.error('Canvas #categoriesDistributionChart non trouvé !');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Détruire l'instance précédente si elle existe
+        if (categoriesChartInstance) {
+            categoriesChartInstance.destroy();
+        }
+        
+        // Créer le graphique
+        categoriesChartInstance = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: ['Développement', 'Design', 'Marketing', 'Business', 'Data', 'Photo', 'Musique', 'Langues', 'Mobile'],
+                labels: ['Dev Web', 'Design', 'Marketing', 'Business', 'Data', 'Photo', 'Musique', 'Langues', 'Mobile'],
                 datasets: [{
                     label: 'Nombre de cours',
                     data: [24, 18, 15, 12, 10, 8, 6, 9, 11],
-                    backgroundColor: 'rgba(79, 70, 229, 0.8)',
-                    borderRadius: 8
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',   // blue
+                        'rgba(236, 72, 153, 0.8)',   // pink
+                        'rgba(34, 197, 94, 0.8)',    // green
+                        'rgba(168, 85, 247, 0.8)',   // purple
+                        'rgba(249, 115, 22, 0.8)',   // orange
+                        'rgba(239, 68, 68, 0.8)',    // red
+                        'rgba(79, 70, 229, 0.8)',    // indigo
+                        'rgba(20, 184, 166, 0.8)',   // teal
+                        'rgba(234, 179, 8, 0.8)'     // yellow
+                    ],
+                    borderRadius: 8,
+                    borderSkipped: false
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: false }
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1f2937',
+                        titleColor: '#f3f4f6',
+                        bodyColor: '#d1d5db',
+                        padding: 12,
+                        cornerRadius: 8
+                    }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: { color: '#e5e7eb' }
+                        grid: { color: '#e5e7eb' },
+                        ticks: { 
+                            precision: 0,
+                            stepSize: 5
+                        }
                     },
                     x: {
                         grid: { display: false }
@@ -345,6 +408,15 @@
                 }
             }
         });
+        
+        console.log('✅ Graphique de distribution créé avec succès');
+    });
+    
+    // Nettoyer le graphique avant de quitter la page
+    window.addEventListener('beforeunload', function() {
+        if (categoriesChartInstance) {
+            categoriesChartInstance.destroy();
+        }
     });
 </script>
 @endpush

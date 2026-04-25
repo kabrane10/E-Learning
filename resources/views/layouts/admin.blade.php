@@ -211,7 +211,7 @@
                     Gamification
                 </x-admin.sidebar-link>
 
-                <x-admin.sidebar-link :href="route('admin.chat.index')" :active="request()->routeIs('admin.chat.*')" icon="comment-dots">
+                <x-admin.sidebar-link :href="route('chat.index')" :active="request()->routeIs('admin.chat.*')" icon="comment-dots">
                     Chat
                 </x-admin.sidebar-link>
 

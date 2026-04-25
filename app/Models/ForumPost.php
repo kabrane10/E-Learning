@@ -38,15 +38,25 @@ class ForumPost extends Model
             $post->topic->increment('posts_count');
             $post->topic->updateLastPost($post);
 
-            // Points pour la création d'un post
-            app(\App\Services\GamificationService::class)->addPoints(
-                $post->user,
-                'forum_post_created',
-                $post
-            );
+            // Points pour la création d'un post (si le service existe)
+            if (class_exists(\App\Services\GamificationService::class)) {
+                try {
+                    app(\App\Services\GamificationService::class)->addPoints(
+                        $post->user,
+                        'forum_post_created',
+                        $post
+                    );
+                } catch (\Exception $e) {
+                    \Log::error('Erreur gamification post created: ' . $e->getMessage());
+                }
+            }
 
-            // Notifier les abonnés
-            $post->topic->notifySubscribers($post);
+            // ✅ Notifier les abonnés - Appel corrigé
+            try {
+                $post->topic->notifySubscribers($post);
+            } catch (\Exception $e) {
+                \Log::error('Erreur notification subscribers: ' . $e->getMessage());
+            }
         });
 
         static::updated(function ($post) {

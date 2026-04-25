@@ -21,7 +21,7 @@
         <!-- Liste des catégories -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @foreach($categories as $category)
-                <a href="{{ route('forum.categories.show', $category) }}" 
+                <a href="{{ route('admin.forum.categories.show', $category) }}" 
                    class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-300 group">
                     <div class="flex items-start space-x-4">
                         <div class="w-12 h-12 bg-{{ $category->color }}-100 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">

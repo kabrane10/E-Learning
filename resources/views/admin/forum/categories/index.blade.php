@@ -84,19 +84,31 @@
                     </div>
                 </div>
             </div>
+            <!--  statistique "Dernière activité" -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-gray-500 uppercase">Dernière activité</p>
-                        <p class="text-2xl font-bold text-gray-900">
-                            {{ \App\Models\ForumTopic::max('last_post_at') ? \App\Models\ForumTopic::max('last_post_at')->diffForHumans() : 'Aucune' }}
-                        </p>
-                    </div>
-                    <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-clock text-purple-600"></i>
-                    </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-xs text-gray-500 uppercase">Dernière activité</p>
+                    <p class="text-2xl font-bold text-gray-900">
+                        @php
+                            $lastActivity = \App\Models\ForumTopic::max('last_post_at');
+                        @endphp
+                        @if($lastActivity)
+                            @if(is_string($lastActivity))
+                                {{ \Carbon\Carbon::parse($lastActivity)->diffForHumans() }}
+                            @else
+                                {{ $lastActivity->diffForHumans() }}
+                            @endif
+                        @else
+                            Aucune
+                        @endif
+                    </p>
+                </div>
+                <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-clock text-purple-600"></i>
                 </div>
             </div>
+        </div>
         </div>
 
         <!-- Liste des catégories -->
@@ -158,15 +170,25 @@
                                     {{ $category->topics_sum_posts_count ?? 0 }}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    @if($category->lastTopic)
-                                        <a href="{{ $category->lastTopic->url }}" class="text-sm text-indigo-600 hover:text-indigo-700">
-                                            {{ Str::limit($category->lastTopic->title, 30) }}
-                                        </a>
-                                        <p class="text-xs text-gray-500">{{ $category->lastTopic->last_post_at->diffForHumans() }}</p>
-                                    @else
-                                        <span class="text-sm text-gray-400">Aucun sujet</span>
-                                    @endif
-                                </td>
+    @if($category->lastTopic)
+        <a href="{{ $category->lastTopic->url ?? '#' }}" class="text-sm text-indigo-600 hover:text-indigo-700">
+            {{ Str::limit($category->lastTopic->title, 30) }}
+        </a>
+        <p class="text-xs text-gray-500">
+            @if($category->lastTopic->last_post_at)
+                @if(is_string($category->lastTopic->last_post_at))
+                    {{ \Carbon\Carbon::parse($category->lastTopic->last_post_at)->diffForHumans() }}
+                @else
+                    {{ $category->lastTopic->last_post_at->diffForHumans() }}
+                @endif
+            @else
+                -
+            @endif
+        </p>
+    @else
+        <span class="text-sm text-gray-400">Aucun sujet</span>
+    @endif
+</td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <span class="px-2 py-1 text-xs font-medium rounded-full {{ $category->is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700' }}">
                                         {{ $category->is_active ? 'Actif' : 'Inactif' }}
@@ -177,7 +199,7 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex items-center justify-end space-x-2">
-                                        <a href="{{ route('forum.categories.show', $category) }}" 
+                                        <a href="{{ route('admin.forum.categories.show', $category) }}" 
                                            class="text-gray-400 hover:text-indigo-600 transition-colors"
                                            target="_blank"
                                            title="Voir">

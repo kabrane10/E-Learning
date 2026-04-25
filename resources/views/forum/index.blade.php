@@ -20,6 +20,20 @@
     .topic-row:hover {
         background-color: #f9fafb;
     }
+
+    .stat-card {
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.stat-card:hover .rounded-xl {
+    transform: scale(1.05);
+    transition: transform 0.2s ease;
+}
 </style>
 @endpush
 
@@ -44,25 +58,41 @@
         
         <!-- Statistiques -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-white rounded-xl shadow-sm p-5 text-center">
-                <div class="text-3xl mb-2">💬</div>
+            <!-- Sujets -->
+            <div class="stat-card bg-white rounded-xl shadow-md border border-gray-100 p-5 text-center">
+                <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-md">
+                    <i class="fas fa-comments text-white text-xl"></i>
+                </div>
                 <div class="text-2xl font-bold text-gray-900">{{ number_format($stats['topics_count']) }}</div>
-                <div class="text-sm text-gray-500">Sujets</div>
+                <p class="text-sm text-gray-500 font-medium">Sujets</p>
             </div>
-            <div class="bg-white rounded-xl shadow-sm p-5 text-center">
-                <div class="text-3xl mb-2">💭</div>
+    
+            <!-- Messages -->
+            <div class="stat-card bg-white rounded-xl shadow-md border border-gray-100 p-5 text-center">
+                <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl flex items-center justify-center shadow-md">
+                    <i class="fas fa-comment-dots text-white text-xl"></i>
+                </div>
                 <div class="text-2xl font-bold text-gray-900">{{ number_format($stats['posts_count']) }}</div>
-                <div class="text-sm text-gray-500">Messages</div>
+                <p class="text-sm text-gray-500 font-medium">Messages</p>
             </div>
-            <div class="bg-white rounded-xl shadow-sm p-5 text-center">
-                <div class="text-3xl mb-2">👥</div>
+    
+            <!-- Membres -->
+            <div class="stat-card bg-white rounded-xl shadow-md border border-gray-100 p-5 text-center">
+                <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-purple-500 to-violet-500 rounded-xl flex items-center justify-center shadow-md">
+                    <i class="fas fa-users text-white text-xl"></i>
+                </div>
                 <div class="text-2xl font-bold text-gray-900">{{ number_format($stats['users_count']) }}</div>
-                <div class="text-sm text-gray-500">Membres</div>
+                <p class="text-sm text-gray-500 font-medium">Membres</p>
             </div>
-            <div class="bg-white rounded-xl shadow-sm p-5 text-center">
-                <div class="text-3xl mb-2">🟢</div>
+    
+            <!-- En ligne -->
+            <div class="stat-card bg-white rounded-xl shadow-md border border-gray-100 p-5 text-center">
+                <div class="w-12 h-12 mx-auto mb-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center shadow-md relative">
+                    <i class="fas fa-circle text-white text-xl"></i>
+                    <span class="absolute top-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></span>
+                </div>
                 <div class="text-2xl font-bold text-gray-900">{{ number_format($stats['online_users']) }}</div>
-                <div class="text-sm text-gray-500">En ligne</div>
+                <p class="text-sm text-gray-500 font-medium">En ligne</p>
             </div>
         </div>
         
